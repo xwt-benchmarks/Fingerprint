@@ -25,11 +25,11 @@ ext {
 }
 
 android {
-    compileSdkVersion 27
+    compileSdkVersion 28
 
     defaultConfig {
         minSdkVersion 23
-        targetSdkVersion 27
+        targetSdkVersion 28
         versionCode 37
         versionName project.ext.libraryVersion
 
@@ -41,6 +41,30 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+        checkTypes {
+            javaCompileOptions.annotationProcessorOptions.
+                    classNames.add("org.checkerframework.checker.keystore.KeyStoreChecker")
+            // Uncomment to do the strongboxbacked checking.
+            // javaCompileOptions.annotationProcessorOptions.arguments.put("lint", "strongboxbacked")
+            javaCompileOptions.annotationProcessorOptions.arguments.put("stubs", "hardwarebacked.astub")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = 1.8
+        targetCompatibility = 1.8
+    }
+}
+
+repositories {
+    mavenLocal()
+}
+
+configurations {
+    checkerFrameworkAnnotatedJDK {
+        description = 'a copy of JDK classes with Checker Framework type qualifiers inserted'
+    }
+    errorproneJavac {
+        description = 'required to run the Checker Framework.'
     }
 }
 
@@ -50,8 +74,27 @@ dependencies {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
 
-    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support:appcompat-v7:28.0.0'
     testImplementation 'junit:junit:4.12'
+
+    ext.checkerFrameworkVersion = '3.1.1'
+    annotationProcessor "org.checkerframework:keystore-checker:0.1-SNAPSHOT"
+    implementation files("../../../../keystore-checker-qual-android/build/libs/keystore-checker-qual-android.jar")
+    checkerFrameworkAnnotatedJDK files("../../../../jdk8.jar")
+    compileOnly "org.checkerframework:checker-qual-android:${checkerFrameworkVersion}"
+    errorproneJavac 'com.google.errorprone:javac:9+181-r4173-1'
+}
+
+gradle.projectsEvaluated {
+    tasks.withType(JavaCompile).all { compile ->
+        if (compile.name.contains("CheckTypes")) {
+            compile.options.compilerArgs += [
+                    "-Xbootclasspath/p:${configurations.checkerFrameworkAnnotatedJDK.asPath}"
+            ]
+            options.fork = true
+            options.forkOptions.jvmArgs += ["-Xbootclasspath/p:${configurations.errorproneJavac.asPath}"]
+        }
+    }
 }
 
 apply from: 'https://raw.githubusercontent.com/omaflak/Bintray/master/install.gradle'
